@@ -16,6 +16,9 @@ using SquareWv = Oscil<SQUARE_NO_ALIAS_2048_NUM_CELLS, SAMPLE_RATE>;
 #define PIN_RV3 A2
 #define PIN_RV4 A3
 
+int potValue[4] = {0,0,0,0};
+void readPotentiometer(void *);
+
 SquareWv squarewv_;
 Sawtooth sawtooth_;
 
@@ -56,6 +59,8 @@ void setup()
     pcmSetup();
 
     Serial.println("Synth prototype ready");
+
+    xTaskCreate(readPotentiometer,"readPot",128,NULL,2,NULL);
 }
 
 void loop()
@@ -64,4 +69,18 @@ void loop()
     delay(500);
     digitalWrite(LED_BUILTIN, 0);
     delay(500);
+}
+
+void readPotentiometer(void *)
+{
+    for(;;)
+    {
+        for(int i=0; i<4; i++)
+        {
+        potValue[i] = analogRead(i);
+        Serial.print(potValue[i]);
+        }
+        // Serial.println();
+        vTaskDelay(100/portTICK_PERIOD_MS);
+    }
 }
