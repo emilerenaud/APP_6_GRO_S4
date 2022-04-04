@@ -3,6 +3,7 @@
 #include <Oscil.h>
 #include <tables/saw2048_int8.h>
 #include <tables/square_no_alias_2048_int8.h>
+#include <math.h>
 
 #include "pcm_audio.hpp"
 #include <limits.h>
@@ -162,12 +163,12 @@ int8_t processVCF(int8_t vco)
         }
     }
 
-    float q_org = map(potValue[1],0,1023,0,1);
-    float f_org = map(potValue[2],0,1023,0,4000);
+    float q_org = (potValue[1]*1.0f)/1023.0f;
+    float f_org = (potValue[1]*(4000.0f*((2.0f*PI)/8000.0f)))/1023.0f;
     int16_t q = q_org*256;
     int16_t f = f_org*256;   
     int16_t fb = q + q/(1+f);
-    result = (f^2)*x + (2-2*f+f*fb-(f^2)*fb)*y[1] - (1-2*f+f*fb+f^2-(f^2)*fb)*y[2];
+    result = (f^2)*x + (2-2*f+f*fb-(f^2)*fb)*y[1] - (1-2*f+f*fb+(f^2)-(f^2)*fb)*y[2];
     y[0] = 0xFF & (result >> 8);
 
     return y[0];
