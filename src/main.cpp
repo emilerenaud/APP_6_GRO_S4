@@ -51,7 +51,7 @@ int8_t nextSample()
     int8_t vco = sawtooth_.next() + squarewv_.next();
     
     // VCF 
-    int8_t vcf = processVCF(vco);
+    int8_t vcf = vco;
 
     // VCA (disabled)   
     int8_t vca = vcf;
@@ -82,8 +82,8 @@ void setup()
 
     xTaskCreate(readPotentiometer,"readPot",128,NULL,2,NULL);
 
-    xTaskCreate(waitButton,"waitButton",128,NULL,2,NULL);
-    xTaskCreate(melodie,"melodie", 128, NULL, 3, NULL);
+    // xTaskCreate(waitButton,"waitButton",128,NULL,2,NULL);
+    xTaskCreate(melodie,"melodie", 500, NULL, 3, NULL);
 
 
     Serial.println("Synth prototype ready");
@@ -119,11 +119,13 @@ void ISR_button1()
 {
     if(digitalRead(PIN_SW1))
     {
+        pcmSetup();
         xEventGroupSetBitsFromISR(eventGroupButton,0x01,pdFALSE);
     }
     else
     {
         xEventGroupClearBitsFromISR(eventGroupButton,0x01);
+        stopPlayback();
     }
 }
 
@@ -149,7 +151,8 @@ void waitButton(void *)
         //             pdTRUE,  // Clear bit on exit.
         //             pdTRUE, // Wait all the bits
         //             portMAX_DELAY); // no Timeout
-        // Serial.println("Waked up 2");
+        xEventGroupWaitBits(eventGroupButton, 0x01, pdFALSE, pdFALSE, portMAX_DELAY);
+        Serial.println("Waked up 2");
     }
 }
 
@@ -185,16 +188,19 @@ int8_t processVCA(int8_t vcf)
 
 void melodie(void*)
 {
-    uint8_t nb_sample; // 512 max
+    uint16_t nb_sample; // 512 max
     int8_t note = 0;
     int8_t init = 0; 
     for(;;)
-    {
+    {   
         xEventGroupWaitBits(eventGroupButton, 0x01, pdFALSE, pdFALSE, portMAX_DELAY);
 
         if(init == 0)
         {
             nb_sample = ((128*TEMPO_16T_MS)/16)*song[note].duration;
+            // Serial.print(nb_sample);
+            // Serial.print("      ");
+            // Serial.println(song[note].freq);
             setNoteHz(song[note].freq);
             init = 1;
         }
@@ -203,8 +209,11 @@ void melodie(void*)
         {
             pcmAddSample(nextSample());
             nb_sample--;
+            // Serial.println(nb_sample);
             if(nb_sample == 0)
             {
+
+                // Serial.print("sample = 0");
                 note++;
 
                 if(note == 4)
@@ -215,7 +224,8 @@ void melodie(void*)
                 init = 0;
             }     
         }
-        vTaskDelay(1);
+
+        // vTaskDelay(0);
     }
     
 
