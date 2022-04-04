@@ -146,3 +146,45 @@ void waitButton(void *)
         // Serial.println("Waked up 2");
     }
 }
+
+void task_pot_RV1(void*)
+{
+    while(1)
+    {
+        int16_t valeur_pot = analogRead(PIN_RV1);
+        vTaskDelay(6);
+    }
+    
+
+}
+
+
+int8_t processVCF_test(int8_t vco) // a verifier
+{
+    static int8_t x [3] = {0,0,0}; 
+    static int8_t y [3] = {0,0,0}; 
+    
+    float b_org [3] ={0.0200833655642112, 0.0401667311284225, 0.0200833655642112};
+    float a_org [3] ={1, -1.56101807580072, 0.641351538057563};
+    int16_t b [3] = {b_org[1]*256, b_org[2]*256, b_org[3]*256};
+    int16_t a [3] = {a_org[1]*256, a_org[2]*256, a_org[3]*256};
+
+    for(int8_t i = 2; i > 0; i--)
+    {
+        if(i > 0)
+        {
+            x[i] = x[i-1];
+            y[i] = y[i-1];
+        }
+    }
+    x[0] = vco;
+    int16_t yi = b[0]*x[0] + b[1]*x[1] + b[2]*x[2] + a[1]*y[1] + a[2]*y[2];
+    y[0] = 0xFF & (yi >> 8);
+
+    return y[0];
+}
+
+int8_t processVCF(int8_t vco) // partie 15.3 labo 3 a terminer...
+{
+
+}
