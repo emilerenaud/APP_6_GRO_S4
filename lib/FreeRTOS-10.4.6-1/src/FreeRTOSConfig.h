@@ -101,6 +101,8 @@ to exclude the API function. */
 #define INCLUDE_xTaskGetIdleTaskHandle          0 // create an idle task handle.
 #define INCLUDE_xTaskGetCurrentTaskHandle       0
 #define INCLUDE_uxTaskGetStackHighWaterMark     1
+#define INCLUDE_xTimerPendFunctionCall 1
+#define INCLUDE_xEventGroupSetBitFromISR 1
 
 #define configMAX(a,b)  ({ __typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a > _b ? _a : _b; })
 #define configMIN(a,b)  ({ __typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a < _b ? _a : _b; })
