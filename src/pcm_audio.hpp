@@ -12,7 +12,7 @@
 
 #define SPEAKER_PIN 10 // Mega
 
-#define PCM_BUFFER_SIZE 64
+#define PCM_BUFFER_SIZE 128
 
 int8_t              pcm_buffer_[PCM_BUFFER_SIZE];
 int                 pcm_buffer_in_;
