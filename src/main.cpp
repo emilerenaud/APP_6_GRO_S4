@@ -29,6 +29,7 @@ void readPotentiometer(void *);
 void ISR_button1(void);
 void ISR_button2(void);
 void waitButton(void *);
+int8_t processVCF(int8_t vco);
 
 
 SquareWv squarewv_;
@@ -145,4 +146,29 @@ void waitButton(void *)
         //             portMAX_DELAY); // no Timeout
         // Serial.println("Waked up 2");
     }
+}
+
+int8_t processVCF(int8_t vco)
+{
+    static int8_t y [3] = {0,0,0};
+    int16_t result = 0;
+    int8_t x = vco;
+
+    for(int8_t i = 2; i > 0; i--)
+    {
+        if(i > 0)
+        {
+            y[i] = y[i-1];
+        }
+    }
+
+    float q_org = map(potValue[1],0,1023,0,1);
+    float f_org = map(potValue[2],0,1023,0,4000);
+    int16_t q = q_org*256;
+    int16_t f = f_org*256;   
+    int16_t fb = q + q/(1+f);
+    result = (f^2)*x + (2-2*f+f*fb-(f^2)*fb)*y[1] - (1-2*f+f*fb+f^2-(f^2)*fb)*y[2];
+    y[0] = 0xFF & (result >> 8);
+
+    return y[0];
 }
