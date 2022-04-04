@@ -6,6 +6,7 @@
 #include <math.h>
 
 #include "pcm_audio.hpp"
+#include "song.hpp"
 #include <limits.h>
 #include <event_groups.h>
 
@@ -31,6 +32,8 @@ void ISR_button1(void);
 void ISR_button2(void);
 void waitButton(void *);
 int8_t processVCF(int8_t vco);
+int8_t processVCA(int8_t vcf);
+void melodie(void*);
 
 
 SquareWv squarewv_;
@@ -47,8 +50,8 @@ int8_t nextSample()
     // VCO
     int8_t vco = sawtooth_.next() + squarewv_.next();
     
-    // VCF (disabled)
-    int8_t vcf = vco;
+    // VCF 
+    int8_t vcf = processVCF(vco);
 
     // VCA (disabled)   
     int8_t vca = vcf;
@@ -80,6 +83,7 @@ void setup()
     xTaskCreate(readPotentiometer,"readPot",128,NULL,2,NULL);
 
     xTaskCreate(waitButton,"waitButton",128,NULL,2,NULL);
+    xTaskCreate(melodie,"melodie", 128, NULL, 3, NULL);
 
 
     Serial.println("Synth prototype ready");
@@ -164,7 +168,7 @@ int8_t processVCF(int8_t vco)
     }
 
     float q_org = (potValue[1]*1.0f)/1023.0f;
-    float f_org = (potValue[1]*(4000.0f*((2.0f*PI)/8000.0f)))/1023.0f;
+    float f_org = (potValue[2]*(4000.0f*((2.0f*PI)/8000.0f)))/1023.0f;
     int16_t q = q_org*256;
     int16_t f = f_org*256;   
     int16_t fb = q + q/(1+f);
@@ -172,4 +176,47 @@ int8_t processVCF(int8_t vco)
     y[0] = 0xFF & (result >> 8);
 
     return y[0];
+}
+
+int8_t processVCA(int8_t vcf)
+{
+
+}
+
+void melodie(void*)
+{
+    uint8_t nb_sample; // 512 max
+    int8_t note = 0;
+    int8_t init = 0; 
+    for(;;)
+    {
+        xEventGroupWaitBits(eventGroupButton, 0x01, pdFALSE, pdFALSE, portMAX_DELAY);
+
+        if(init == 0)
+        {
+            nb_sample = ((128*TEMPO_16T_MS)/16)*song[note].duration;
+            setNoteHz(song[note].freq);
+            init = 1;
+        }
+
+        if(!pcmBufferFull() && nb_sample != 0)
+        {
+            pcmAddSample(nextSample());
+            nb_sample--;
+            if(nb_sample == 0)
+            {
+                note++;
+
+                if(note == 4)
+                {
+                    note = 0;
+                }
+
+                init = 0;
+            }     
+        }
+        vTaskDelay(1);
+    }
+    
+
 }
