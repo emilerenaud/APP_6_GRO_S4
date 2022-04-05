@@ -23,12 +23,15 @@ using SquareWv = Oscil<SQUARE_NO_ALIAS_2048_NUM_CELLS, SAMPLE_RATE>;
 
 // Variables
 int potValue[4] = {0,0,0,0};
-float q_org;
-float f_org;
 bool initMel = 0;
 bool mel_ON = 0;
 EventGroupHandle_t eventGroupButton;
-
+bool initPWM = 0;
+bool buttonRelease = 0;
+bool initVCA = 0;
+float q_org;
+float f_org;
+bool initNote = 0;
 
 // Prototypes
 void readPotentiometer(void *);
@@ -37,7 +40,9 @@ void ISR_button2(void);
 void waitButton(void *);
 int8_t processVCF(int8_t vco);
 int8_t processVCA(int8_t vcf);
-void melodie(void*);
+// void melodie(void*);
+void fillPCM(void *);
+void createNote(void*);
 
 
 SquareWv squarewv_;
@@ -55,8 +60,8 @@ int8_t nextSample()
     int8_t vco = sawtooth_.next() + squarewv_.next();
     
     // VCF 
-    //int8_t vcf = processVCF(vco);
-    int8_t vcf = vco;
+    int8_t vcf = processVCF(vco);
+    // int8_t vcf = vco;
 
     // VCA (disabled)
     int8_t vca = processVCA(vcf);   
@@ -89,7 +94,8 @@ void setup()
     xTaskCreate(readPotentiometer,"readPot",128,NULL,3,NULL);
 
     // xTaskCreate(waitButton,"waitButton",128,NULL,2,NULL);
-    xTaskCreate(melodie,"melodie", 500, NULL, 2, NULL);
+    xTaskCreate(fillPCM,"melodie", 500, NULL, 2, NULL);
+    xTaskCreate(createNote,"createNote", 128, NULL, 1, NULL);
 
 
     Serial.println("Synth prototype ready");
@@ -125,18 +131,17 @@ void readPotentiometer(void *)
 
 void ISR_button1()
 {
-    if(digitalRead(PIN_SW1))
+    if (digitalRead(PIN_SW1))
     {
-        pcmSetup();
-        xEventGroupSetBitsFromISR(eventGroupButton,0x01,pdFALSE);
-        initMel = 0;
-        mel_ON = 1;
+        xEventGroupSetBitsFromISR(eventGroupButton, 0x01, pdFALSE);
+        initPWM = 1;
+        initVCA = 1;
     }
     else
     {
-        mel_ON = 0;
-        //xEventGroupClearBitsFromISR(eventGroupButton,0x01);
-        //stopPlayback();
+        buttonRelease = 1;
+        // 
+        // stopPlayback();
     }
 }
 
@@ -145,10 +150,13 @@ void ISR_button2()
     if(digitalRead(PIN_SW2))
     {
         xEventGroupSetBitsFromISR(eventGroupButton,0x02,pdFALSE);
+        initNote = 1;
+        initVCA = 1;
     }
     else
     {
-        xEventGroupClearBitsFromISR(eventGroupButton,0x02);
+        // xEventGroupClearBitsFromISR(eventGroupButton,0x02);
+        buttonRelease = 1;
     }
 }
 
@@ -193,71 +201,115 @@ int8_t processVCF(int8_t vco)
 }
 
 int8_t processVCA(int8_t vcf)
-{
-    float tempsVCA_org = 1023.0f - ((potValue[3]*5000.0f)/1023.0f);
-    int16_t tempsVCA = tempsVCA_org*256;
-    int16_t resVCA = 0;
-    int8_t vcaOUT = 0;
-
-    if(mel_ON == 0)
+{   
+    static int16_t nb_echan = 0;
+    static int16_t compteur = 0;
+    static float gain = 0;
+    if(initVCA)
     {
-        int16_t decline = (tempsVCA - xTaskGetTickCount())/tempsVCA;
-        Serial.println(tempsVCA);
-        resVCA = decline*vcf;
-        vcaOUT = 0xFF & (resVCA >> 8);    
+        initVCA = 0;
+        nb_echan = map(potValue[3],1023,0,0,10000);
+        compteur = 0;
+
+    }
+
+    if(buttonRelease)
+    {
+        if(compteur > nb_echan)
+        {
+            gain = 0;
+            buttonRelease = 0;
+            xEventGroupClearBitsFromISR(eventGroupButton, 0x01);
+            xEventGroupClearBitsFromISR(eventGroupButton, 0x02);
+            stopPlayback();
+        }
+        else
+        {
+            gain = 1.0 -(float(compteur) / float(nb_echan)); // 
+            // Serial.println(gain);
+            compteur ++;
+        }
+
     }
     else
     {
-        vcaOUT = vcf;
+        gain = 1;
     }
 
-     return vcaOUT;
+    return int8_t(gain * vcf);
 }
 
-void melodie(void*)
+void fillPCM(void *)
 {
     uint16_t nb_sample; // 512 max
     int8_t note = 0;
-    //int8_t init = 0; 
-    
+    int8_t init = 0; 
+    for(;;)
+    {   
+        xEventGroupWaitBits(eventGroupButton, 0x01, pdFALSE, pdFALSE, portMAX_DELAY);
+
+        if(initPWM)
+        {
+            pcmSetup();
+            note = 0;
+            nb_sample = 0;
+            initPWM = 0;
+            init = 0;
+        }
+
+        if(init == 0)
+        {
+            nb_sample = ((128*TEMPO_16T_MS)/16)*song[note].duration;
+            // Serial.print(nb_sample);
+            // Serial.print("      ");
+            // Serial.println(song[note].freq);
+            setNoteHz(song[note].freq);
+            init = 1;
+        }
+
+        if(!pcmBufferFull() && nb_sample != 0)
+        {
+            pcmAddSample(nextSample());
+            nb_sample--;
+            // Serial.println(nb_sample);
+            if(nb_sample == 0)
+            {
+
+                // Serial.print("sample = 0");
+                note++;
+
+                if(note == 4)
+                {
+                    note = 0;
+                }
+
+                init = 0;
+            }     
+        }
+
+        // taskYIELD();
+    }
+}
+
+void createNote(void*)
+{
     for(;;)
     {
-        //if(mel_ON == 1)
-        //{   
-            xEventGroupWaitBits(eventGroupButton, 0x01, pdFALSE, pdFALSE, portMAX_DELAY);
+        xEventGroupWaitBits(eventGroupButton, 0x02, pdFALSE, pdFALSE, portMAX_DELAY);
+        if(initNote)
+        {
+            pcmSetup();
+            initNote = 0;
+            float freq = map(potValue[0],0,1023,0,4000);
+            setNoteHz(freq);
+        }
+        
 
-            if(initMel == 0)
-            {
-                nb_sample = ((128*TEMPO_16T_MS)/16)*song[note].duration;
-                // Serial.print(nb_sample);
-                // Serial.print("      ");
-                // Serial.println(song[note].freq);
-                setNoteHz(song[note].freq);
-                initMel = 1;
-            }
-
-            if(!pcmBufferFull() && nb_sample != 0)
-            {
-                pcmAddSample(nextSample());
-                nb_sample--;
-                // Serial.println(nb_sample);
-                if(nb_sample == 0)
-                {
-
-                    // Serial.print("sample = 0");
-                    note++;
-
-                    if(note == 4)
-                    {
-                        note = 0;
-                    }
-
-                    initMel = 0;
-                }     
-            }
-
-        //}
-        vTaskDelay(0);
+       if(!pcmBufferFull())
+       {
+           pcmAddSample(nextSample());
+       }
+       vTaskDelay(0);
     }
-
 }
+    
