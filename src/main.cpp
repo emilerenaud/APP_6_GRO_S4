@@ -32,7 +32,7 @@ bool initVCA = 0;
 float q_org;
 float f_org;
 bool initNote = 0;
-
+int8_t tempoMS = 0;
 // Prototypes
 void readPotentiometer(void *);
 void ISR_button1(void);
@@ -122,8 +122,9 @@ void readPotentiometer(void *)
         potValue[i] = analogRead(i);
         // Serial.print(potValue[i]);
         }
-        q_org = (potValue[1]*1.0f)/1023.0f;
-        f_org = (potValue[2]*(1000.0f*((2.0f*PI)/8000.0f)))/1023.0f;
+        q_org = (potValue[0]*1.0f)/1023.0f;
+        f_org = ((potValue[1]*(PI/2.0f))/1023.0f);
+        tempoMS = ((60*250)/map(potValue[2],0,1023,60,240));
         //Serial.println(potValue[1]);
         vTaskDelay(100/portTICK_PERIOD_MS); // 10Hz -> 100ms
     }
@@ -259,7 +260,7 @@ void fillPCM(void *)
 
         if(init == 0)
         {
-            nb_sample = ((128*TEMPO_16T_MS)/16)*song[note].duration;
+            nb_sample = ((128*tempoMS)/16)*song[note].duration;
             // Serial.print(nb_sample);
             // Serial.print("      ");
             // Serial.println(song[note].freq);
@@ -300,7 +301,7 @@ void createNote(void*)
         {
             pcmSetup();
             initNote = 0;
-            float freq = map(potValue[0],0,1023,0,4000);
+            float freq = map(potValue[2],0,1023,1,4000);
             setNoteHz(freq);
         }
         
@@ -309,7 +310,7 @@ void createNote(void*)
        {
            pcmAddSample(nextSample());
        }
-       vTaskDelay(0);
+    //    taskYIELD();
     }
 }
     
